@@ -9,16 +9,22 @@ import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class SistemaOperativoGUI extends JFrame {
     private List<IProceso> procesos;
     private JPanel panelProcesos;
     private JTextArea textAreaLog;
+    private LinkedBlockingQueue<Runnable> tareaCola;
+    private boolean isRunning;
 
     public SistemaOperativoGUI() {
         super("Ejemplo FIFO - Sistema Operativo");
 
         procesos = new ArrayList<>();
+        tareaCola = new LinkedBlockingQueue<>();
+        isRunning = false;
+
         panelProcesos = new JPanel();
         panelProcesos.setLayout(new GridLayout(0, 1));
 
@@ -78,11 +84,27 @@ public class SistemaOperativoGUI extends JFrame {
         panelProcesos.add(panelProceso);
         panelProcesos.revalidate(); // Actualizar el panel de procesos
         pack(); // Ajustar el tamaño del frame
-        iniciarEjecucion(proceso, progressBar, tiempoLabel);
+
+        tareaCola.add(() -> iniciarEjecucion(proceso, progressBar, tiempoLabel));
+        if (!isRunning) {
+            ejecutarSiguienteTarea();
+        }
+    }
+
+    private void ejecutarSiguienteTarea() {
+        if (!tareaCola.isEmpty()) {
+            isRunning = true;
+            Runnable tarea = tareaCola.poll();
+            if (tarea != null) {
+                tarea.run();
+            }
+        } else {
+            isRunning = false;
+        }
     }
 
     private void iniciarEjecucion(IProceso proceso, JProgressBar progressBar, JLabel tiempoLabel) {
-        SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
+        SwingWorker<Void, Void> worker = new SwingWorker<>() {
             @Override
             protected Void doInBackground() throws Exception {
                 for (int i = 0; i <= proceso.getTiempoEjecucion(); i++) {
@@ -99,6 +121,11 @@ public class SistemaOperativoGUI extends JFrame {
                 }
                 SwingUtilities.invokeLater(() -> textAreaLog.append("Proceso " + proceso.getNombre() + " completado.\n"));
                 return null;
+            }
+
+            @Override
+            protected void done() {
+                ejecutarSiguienteTarea();
             }
         };
 
